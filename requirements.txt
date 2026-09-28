@@ -1,0 +1,12 @@
+docling==2.130.0
+fastapi==0.141.1
+openai==3.19.2
+pinecone==10.0.0
+psycopg2==2.9.12
+pydantic==2.13.5
+python-dotenv==1.2.3
+resend==2.39.0
+sentence_transformers==5.4.1
+supabase==2.31.0
+torch==2.11.0
+transformers==5.5.4

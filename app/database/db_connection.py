@@ -7,7 +7,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Fetch variables
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 # Connect to the database
 def connect_to_database():
     """Get a database connection with proper error handling."""

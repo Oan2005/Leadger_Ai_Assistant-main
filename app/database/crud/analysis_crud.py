@@ -1,5 +1,19 @@
 from app.database.db_connection import connect_to_database
-def get_active_users(company_id:str):
+import logging
+
+logger = logging.getLogger(__name__)
+def get_active_users(company_id: str):
+    with connect_to_database() as con:
+        with con.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT user_id)
+                FROM conversations
+                WHERE company_id = %s;
+                """,
+                (company_id,)
+            )
+            return cur.fetchone()[0]
     try:
         with connect_to_database() as con:
             with con.cursor() as cur:
@@ -16,8 +30,8 @@ def get_active_users(company_id:str):
                     return 0
 
                 return result[0]
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Failed to calculate active users")
 def get_total_questions(company_id:str):
     with connect_to_database() as con:
         with con.cursor() as cur:
@@ -50,7 +64,8 @@ def get_avg_response_time(company_id:str):
                 WHERE company_id = %s;
                 """
             ,(company_id,))
-            return round(cur.fetchone()[0],2)
+            average = cur.fetchone()[0]
+            return round(average, 2) if average is not None else None
 def get_unresolved_questions(company_id:str):
     with connect_to_database() as con:
         with con.cursor() as cur:
@@ -153,4 +168,3 @@ def get_company_analytics(company_id: str):
 
         "questions_over_time": get_questions_overtime(company_id)
     }
-

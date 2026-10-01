@@ -1,9 +1,12 @@
+from typing import Literal
 from .model_service import BaseModel,EmailStr,field_validator
+
+Role = Literal["admin", "hr", "employee"]
 
 class UpdateEmployeeByAdminRequest(BaseModel):
     full_name: str | None = None
     phone:str | None = None
-    role:str | None = None
+    role: Role | None = None
 
 class UpdateEmployeeByAdminResponse(BaseModel):
     full_name: str | None = None
@@ -12,7 +15,7 @@ class UpdateEmployeeByAdminResponse(BaseModel):
 
 class SendInvitationToEmployee(BaseModel):
     email: EmailStr
-    role: str
+    role: Role
     phone: str
 
 class UpdateEmployeeByEmployeeRequest(BaseModel):
@@ -27,7 +30,6 @@ class RefreshTokenRequest(BaseModel):
         if len(v) <12:
             raise ValueError('Refresh token is too short')
         return v
-
 
 
 

@@ -53,4 +53,3 @@ def pinecone_query(employee_question: str, top_k = 3,employee_namespace = None):
 
 if __name__ == '__main__':
     query_test = pinecone_query("purpose and scope ",employee_namespace="supplycmd")
-    print(query_test)

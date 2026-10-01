@@ -2,7 +2,9 @@ from fastapi import HTTPException
 
 from pydantic import BaseModel,EmailStr
 from app.database.db_connection import connect_to_database
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 def create_invitation(email, company_id, role, token_hash, admin_id,phone):
@@ -35,10 +37,14 @@ def create_invitation(email, company_id, role, token_hash, admin_id,phone):
                     return None
             conn.commit()
             return invitation_id
-    except Exception as e:
-        conn.rollback()
-        print(e)
-        raise HTTPException(e)
+    except Exception:
+        if "conn" in locals():
+            conn.rollback()
+        logger.exception("Failed to create invitation")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to create invitation."
+        )
 def get_invitation(token_hash):
     try:
         columns = ["id","email","company_id","role","token_hash","created_by","phone","created_at","accepted_at","expires_at"]
@@ -54,9 +60,12 @@ def get_invitation(token_hash):
                     return None
                 return dict(zip(columns, record))
 
-    except Exception as e:
-        print(e)
-        raise HTTPException(e)
+    except Exception:
+        logger.exception("Failed to retrieve invitation")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve invitation."
+        )
 def delete_invitation(invitation_id):
     try:
         with connect_to_database() as conn:
@@ -70,11 +79,12 @@ def delete_invitation(invitation_id):
                 return False
             conn.commit()
             return True
-    except Exception as e:
-        print(e)
-        raise HTTPException(e)
-    finally:
-        conn.close()
+    except Exception:
+        logger.exception("Failed to delete invitation")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to delete invitation."
+        )
 def check_invitation_accepted(email: str):
     with connect_to_database() as conn:
         with conn.cursor() as cur:
@@ -110,15 +120,22 @@ def mark_as_accepted(token_hash:str):
                     UPDATE invitations
                     SET accepted_at = NOW()
                     WHERE token_hash = %s
-                    RETURNING *;
+                    AND accepted_at IS NULL
+                    AND expires_at > NOW()
+                    RETURNING *
                     """
                 ,(token_hash,))
                 response = cur.fetchone()
                 columns = ["id","email","company_id","role","token_hash","created_by","phone","created_at","accepted_at","expires_at"]
                 if response is None:
                     return False
+                conn.commit()
                 return dict(zip(columns, response))
-    except Exception as e:
-        raise
+    except Exception:
+        logger.exception("Failed to accept invitation")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to accept invitation."
+        )
 if __name__ == '__main__':
-    print(get_invitation('e76b069168f4e764b9a23ad82ffd679637695352e8860041c6e1d14dc6c7a45e'))
+    get_invitation('e76b069168f4e764b9a23ad82ffd679637695352e8860041c6e1d14dc6c7a45e')

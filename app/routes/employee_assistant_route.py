@@ -1,4 +1,5 @@
 import uuid
+import logging
 from .route_services import HTTPException
 from .route_services import get_current_user
 from .route_services import APIRouter,Depends
@@ -14,6 +15,7 @@ from .route_services import time
 from .route_services import json
 
 employee_router = APIRouter(tags=["chat"])
+logger = logging.getLogger(__name__)
 
 @employee_router.post("/employee/question")
 async def employee_chat(
@@ -68,20 +70,25 @@ async def employee_chat(
         employee_question=question,
         docs=pinecone_documents
     )
-    print(chat_response)
-
     response_time_ms = round(
         (time.perf_counter() - start_time) * 1000,
         3
     )
 
     # Parse LLM response
-    llm_response = json.loads(chat_response["response"])
-    print(llm_response)
-
-    answer = llm_response["answer"]
-    confidence = llm_response["confidence"]
-    print(confidence, answer)
+    try:
+        llm_response = json.loads(chat_response["response"])
+        answer = llm_response["answer"]
+        confidence = llm_response["confidence"]
+        usage = chat_response["usage"]
+        prompt_tokens = usage.prompt_tokens
+        completion_tokens = usage.completion_tokens
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        logger.exception("LLM returned an invalid response")
+        raise HTTPException(
+            status_code=503,
+            detail="The answer service returned an invalid response."
+        )
 
     # Save conversation
     insert_request = create_conversation(
@@ -92,8 +99,8 @@ async def employee_chat(
         answer=answer,
         response_time_ms=response_time_ms,
         confidence=confidence,
-        prompt_tokens=chat_response["usage"].prompt_tokens,
-        completion_tokens=chat_response["usage"].completion_tokens,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
         cached=False
     )
     if insert_request is False:
@@ -115,7 +122,6 @@ async def employee_chat(
         "confidence": confidence,
         "session_id": session_id
     }
-
 
 
 

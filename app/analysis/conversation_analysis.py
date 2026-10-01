@@ -4,6 +4,9 @@ from app.database.crud.conversation_analysis_crud import get_conversation_analys
     conversation_analysis
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 system_message = """
 # ROLE
 
@@ -504,8 +507,6 @@ def analysis_process(conversation_id: str):
         question = get_data[0][0]
         answer = get_data[0][1]
         confidence = get_data[0][2]
-        #print(question,answer,confidence)
-
         request = client.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
@@ -529,8 +530,6 @@ def analysis_process(conversation_id: str):
         )
 
         response = request.choices[0].message.content
-        print(response)
-
         decoded_response = json.loads(response)
 
         analysis_data = conversation_analysis(
@@ -550,11 +549,9 @@ def analysis_process(conversation_id: str):
             "message": decoded_response
         }
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Conversation analysis failed")
         return {
             "status": False,
-            "message": str(e)
+            "message": "Unable to analyze conversation."
         }
-
-if __name__ == "__main__":
-    print(analysis_process(conversation_id="495759fd-b004-47ad-aad6-e0abd78b240d"))

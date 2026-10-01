@@ -16,7 +16,7 @@ async def get_analysis(current_user = Depends(require_hr_admin)):
     company_id = requested_user["company_id"]
     return get_company_analytics(company_id)
 
-@analysis_chat_route.post("/analysis_dashboard")
+@analysis_chat_route.get("/analysis_dashboard")
 async def get_dashboard_anlysis(current_user = Depends(require_hr_admin)):
     requested_user = get_user_by_id(current_user.id)
     if requested_user is None:

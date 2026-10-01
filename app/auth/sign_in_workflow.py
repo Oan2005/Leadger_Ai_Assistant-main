@@ -4,6 +4,10 @@ from app.supabase_client_package.supabase_connection import Supabase_client, Sup
 from .auth_exceptions import InvalidCredentialsError
 from app.supabase_client_package.supabase_connection import Supabase_client
 from app.auth.auth_exceptions import InvalidCredentialsError
+from supabase_auth.errors import AuthApiError
+import logging
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel,EmailStr
 class SignInRequest(BaseModel):
     email:EmailStr
@@ -32,15 +36,21 @@ def sign_in(data: SignInRequest):
     except InvalidCredentialsError:
         raise
 
-    except Exception as e:
-        print(f"Sign in workflow error: {e}")
+    except AuthApiError as exc:
+        if getattr(exc, "code", None) == "invalid_credentials":
+            raise InvalidCredentialsError("Authentication was unsuccessful.") from exc
+        raise
+
+    except Exception:
+        logger.exception("Sign in workflow failed")
         raise
 
 
 
-
-
-
+if __name__ == "__main__":
+    # Example usage
+    test_data = SignInRequest(email="osamahsheikh2@gmail.com", password="Hassan1977")
+    print(sign_in(test_data))
 
 
 

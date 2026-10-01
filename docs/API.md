@@ -1,81 +1,56 @@
-# API Reference
+# Leadger Assistant API
 
-Base app: `api.py` (`FastAPI()` instance named `app`). Run with
-`uvicorn api:app`.
+The FastAPI application is defined in `main.py` and exposes the routes below.
+Protected routes require a Supabase access token in the `Authorization: Bearer
+<token>` header.
 
----
+## Public authentication routes
 
-## `GET /chat`
+- `POST /signup` - Create a company and its first administrator.
+- `POST /signup/invited` - Create an application user from an unused invitation.
+- `POST /signin` - Authenticate with Supabase.
+- `POST /refresh_token` - Refresh a Supabase session.
+- `GET /company/invite/validate?token=...` - Validate an invitation token.
+- `GET /` - Basic health response.
 
-Answer a user's question using retrieval-augmented generation, or a direct
-greeting response.
+## Authenticated routes
 
-**Query parameters**
+- `POST /logout` - Sign out the current user.
+- `POST /company/users/me` - Return the current application user.
+- `POST /employee/question` - Answer an employee question using the company's
+  Pinecone namespace and the LLM service.
 
-| Name | Type | Required | Description |
-|---|---|---|---|
-| `user_question` | string | yes | The question or greeting text. |
+## Administrator routes
 
-**Behavior**
+- `POST /admin/invite` - Create and send an invitation.
+- `POST /upload` - Process and store a supported HR document.
+- `POST /archive/{document_id}` - Archive a document.
+- `POST /unarchive/{document_id}` - Restore an archived document.
+- `POST /delete/{document_id}` - Mark a document deleted and remove its vectors.
+- `DELETE /company/users/{user_id}` - Delete a user in the administrator's company.
+- `PATCH /company/users/{user_id}/{role}` - Change a same-company user's role.
+- `POST /company/users/invite_user` - Create an employee invitation.
+- `PATCH /admin/employee/{employee_id}` - Update an employee.
+- `DELETE /delete_company` - Delete the current administrator's company.
+- `GET /company/users` - List users in the administrator's company.
+- `GET /company/company_id` - Return the company's Pinecone namespace.
+- `PATCH /company/company_id/{new_name}` - Rename the company.
+- `GET /test-current-user` - Return the current application user.
 
-- If `user_question` (lowercased, stripped) matches a known greeting
-  (`"hi"`, `"hello"`, `"how are you"`, etc. — see
-  `app.vector_database.query.is_greeting` for the full list), the request
-  is routed to `LLM_response_greeting`, which POSTs directly to the
-  greeting n8n webhook.
-- Otherwise, the top **5** most similar chunks are retrieved from Pinecone
-  (`pinecone_query(user_question, top_k=5)`), bundled with the question
-  into `{"user_question": ..., "documents": [...]}`, and POSTed to the
-  main n8n webhook via `LLM_response`.
+## HR and administrator routes
 
-**Response**
+- `GET /analysis` - Return company analytics.
+- `POST /analysis_dashboard` - Return the analytics dashboard data.
+- `GET /namespace/stats/` - Return Pinecone namespace statistics.
 
-```json
-{ "message": "<answer text, or error dict, or error string>" }
-```
+## Employee profile route
 
-Any exception raised during processing is caught and returned as
-`{"message": str(e)}` (HTTP 200 is still returned — errors are not
-surfaced via HTTP status codes).
+- `PATCH /employee/{employee_id}` - Update the authenticated employee's own
+  profile. The current implementation derives the user and company from the
+  access token rather than trusting the path value.
 
----
-
-## `GET /health`
-
-Basic health check.
-
-**Response**
-
-```json
-{ "status": "healthy" }
-```
-
----
-
-## `POST /upload`
-
-Ingest a document into the knowledge base.
-
-**Body**: `multipart/form-data` with a single `file` field.
-
-**Behavior**
-
-1. Reads the uploaded file's bytes and writes them to disk in the current
-   working directory, using the **original uploaded filename**
-   (no sanitization or uniqueness check — see `docs/KNOWN_ISSUES.md`).
-2. Extracts the file into a Docling document object
-   (`extract_to_objects`).
-3. Chunks the document for RAG (`Parse_Doc_for_Rag`), tagging each chunk
-   with heading hierarchy and table membership.
-4. Embeds every chunk (`embedd_chunks`) using `BAAI/bge-base-en-v1.5`.
-5. Upserts all embedded chunks **except the first** (`embedd_docs[1:]`,
-   dropping the placeholder — see `docs/KNOWN_ISSUES.md`) into the
-   Pinecone index `"hr"`, namespace `"__default__"`.
-
-**Response**
-
-```json
-{ "status": "Success" }
-```
-
-On any exception: `{"message": str(e)}`.
+Responses preserve the existing endpoint-specific structures. Validation
+errors are returned by FastAPI as `422`; authentication and authorization
+failures use `401` and `403`; missing resources use `404`; conflicts use
+`409`; and external-service failures use `503` where the route can identify
+them.

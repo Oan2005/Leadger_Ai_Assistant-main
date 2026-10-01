@@ -1,11 +1,14 @@
 from .services import (load_dotenv,os,resend,datetime,
                        timezone,timedelta,secrets,hashlib,Supabase_admin,HTTPException)
 from ...database.crud.invitation_crud import create_invitation
+from .email_provider import get_email_provider
+import logging
 
 load_dotenv()
 
 
 resend.api_key = os.getenv("RESEND_API_KEY")
+logger = logging.getLogger(__name__)
 
 
 def send_invitation_email(
@@ -14,25 +17,12 @@ def send_invitation_email(
     role,
     invitation_token
 ):
-    resend.Emails.send({
-        "from": "onboarding@resend.dev",
-        "to": recipient_email,
-        "subject": f"Invitation to {company_name}",
-        "html": f"""
-            <h2>You're invited!</h2>
-
-            <p>You have been invited to join
-            <strong>{company_name}</strong>.</p>
-
-            <p>Role: <strong>{role}</strong></p>
-
-            <p>Your invitation url:</p>
-
-            <a href="https://numeric-oven-suitcase.ngrok-free.dev/company/invite/validate?token={invitation_token}">
-    Accept Invitation
-</a>
-        """
-    })
+    get_email_provider().send_invitation(
+        recipient_email=recipient_email,
+        company_name=company_name,
+        role=role,
+        invitation_token=invitation_token,
+    )
 
 
 def create_invite_from_admin(email:str,role:str,phone:str,company_name:str,company_id:str,admin_id:str):
@@ -78,24 +68,31 @@ def create_invite_from_admin(email:str,role:str,phone:str,company_name:str,compa
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to create and send invitation")
         raise HTTPException(
             status_code=500,
-            detail=str(e)
+            detail="Unable to create invitation."
         )
 
 
 async def validate_invitation(token: str):
+    if not token:
+        raise HTTPException(status_code=400, detail="Invalid invitation token")
 
-    hashed_token = hashlib.sha256(
-        token.encode()
-    ).hexdigest()
+    hashed_token = hashlib.sha256(token.encode()).hexdigest()
 
-    # Find invitation
-    result =  Supabase_admin.table("invitations") \
-        .select("*") \
-        .eq("token_hash", hashed_token) \
-        .execute()
+    try:
+        result = Supabase_admin.table("invitations") \
+            .select("*") \
+            .eq("token_hash", hashed_token) \
+            .execute()
+    except Exception:
+        logger.exception("Failed to validate invitation")
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to validate invitation."
+        )
 
     if not result.data:
         raise HTTPException(
@@ -130,5 +127,3 @@ async def validate_invitation(token: str):
         "role": invitation["role"],
         "company_id": invitation["company_id"],
     }
-
-

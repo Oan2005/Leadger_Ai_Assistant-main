@@ -90,7 +90,7 @@ async def sign_up_invited(data: InvitedSignupRequest):
             )
 
         request_to_mark = mark_as_accepted(token_hash=hashed_token)
-        if request_to_mark is None:
+        if not request_to_mark:
             Supabase_admin.auth.admin.delete_user(user_id)
             raise HTTPException(status_code=400,detail="failed to mark the invtiation as accepted")
 
@@ -104,7 +104,7 @@ async def sign_up_invited(data: InvitedSignupRequest):
         raise
 
     except Exception as e:
-        print(f"Invited signup error: {e}")
+        logger.exception("Invited signup failed")
         #Supabase_admin.auth.admin.delete_user(user_id)
         raise HTTPException(
             status_code=500,
@@ -127,10 +127,7 @@ def login(data: SignInRequest):
 
         # Auth account exists, but application account doesn't
         if not user_info:
-            print(
-                f"Auth user exists but application user "
-                f"does not exist: {auth_response['user_id']}"
-            )
+            logger.error("Auth user has no application user record")
 
             raise HTTPException(
                 status_code=403,
@@ -156,7 +153,7 @@ def login(data: SignInRequest):
         raise
 
     except Exception as e:
-        print(f"Signin error: {e}")
+        logger.exception("Signin failed")
 
         raise HTTPException(
             status_code=500,
@@ -321,7 +318,7 @@ async def sign_out(
 
     except Exception as e:
 
-        print(f"Logout error: {e}")
+        logger.exception("Logout failed")
 
         raise HTTPException(
             status_code=500,
@@ -345,7 +342,7 @@ async def refresh_token(data: RefreshTokenRequest):
 
     except Exception as e:
 
-        print(f"Refresh token error: {e}")
+        logger.exception("Refresh token refresh failed")
 
         raise HTTPException(
             status_code=401,
@@ -404,11 +401,11 @@ async def create_invitation(
     except HTTPException:
         raise
 
-    except Exception as e:
-        logger.exception(msg=e)
+    except Exception:
+        logger.exception("Invitation endpoint failed")
         raise HTTPException(
             status_code=500,
-            detail=str(e)
+            detail="Unable to create invitation."
         )
 
 

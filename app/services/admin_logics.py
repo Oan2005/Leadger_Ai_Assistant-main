@@ -1,4 +1,7 @@
 from app.supabase_client_package.supabase_connection import Supabase_client, Supabase_admin
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -20,8 +23,8 @@ def can_upload(access_token):
 
         role = user_information.data["role"]
         return role
-    except Exception as e:
-        return {"error": str(e)}
-
+    except Exception:
+        logger.exception("Failed to check upload permission")
+        return {"error": "Unable to check upload permission."}
 
 

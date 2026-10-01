@@ -8,6 +8,9 @@ Upserts embedded chunks into the Pinecone index, using the shared
 
 from app.RAG.vector_database.pinecone_client import connect_to_namespace,index
 from fastapi import HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def status_documents(document_id: str, namespace_name: str):
@@ -35,8 +38,8 @@ def status_documents(document_id: str, namespace_name: str):
                 namespace=namespace_name
             )
 
-        except Exception as e:
-            print(f"Pinecone fetch error: {e}")
+        except Exception:
+            logger.exception("Pinecone fetch failed")
 
             raise HTTPException(
                 status_code=503,
@@ -81,9 +84,9 @@ def status_documents(document_id: str, namespace_name: str):
         # without converting them into 500
         raise
 
-    except Exception as e:
+    except Exception:
         # Unexpected error
-        print(f"Unexpected document status error: {e}")
+        logger.exception("Unexpected document status failure")
 
         raise HTTPException(
             status_code=500,
@@ -97,8 +100,6 @@ def insert_chunks(embedded_chunks, namespace_name: str):
         vectors=embedded_chunks,
         namespace=namespace_name
     )
-
-    print(f"✅ Upserted: {response}")
 
     stats = index.describe_index_stats()
 
@@ -118,9 +119,9 @@ def delete_chunks(document_id, namespace_name):
             "message": "Document chunks deleted successfully."
         }
 
-    except Exception as e:
-        print(e)
-        raise e
+    except Exception:
+        logger.exception("Pinecone delete failed")
+        raise
 def archive_chunks(document_id, namespace_name):
     try:
         fetched_data = index.fetch_by_metadata(
@@ -149,8 +150,8 @@ def archive_chunks(document_id, namespace_name):
             "archived_chunks": archived_count
         }
 
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Pinecone archive failed")
         raise
 def unarchive_documents(document_id: str, namespace_name: str):
     try:
@@ -180,8 +181,8 @@ def unarchive_documents(document_id: str, namespace_name: str):
                 namespace=namespace_name
             )
 
-        except Exception as e:
-            print(f"Pinecone fetch error: {e}")
+        except Exception:
+            logger.exception("Pinecone fetch failed")
 
             raise HTTPException(
                 status_code=503,
@@ -215,8 +216,8 @@ def unarchive_documents(document_id: str, namespace_name: str):
 
                 document_count += 1
 
-        except Exception as e:
-            print(f"Pinecone update error: {e}")
+        except Exception:
+            logger.exception("Pinecone update failed")
 
             raise HTTPException(
                 status_code=503,
@@ -236,8 +237,8 @@ def unarchive_documents(document_id: str, namespace_name: str):
     except HTTPException:
         raise
 
-    except Exception as e:
-        print(f"Unexpected unarchive error: {e}")
+    except Exception:
+        logger.exception("Unexpected unarchive failure")
 
         raise HTTPException(
             status_code=500,
@@ -255,11 +256,4 @@ def unarchive_documents(document_id: str, namespace_name: str):
 #         response = dict(fetched_data.vectors)
 #         return response[f"{document_id}-2"]["metadata"]["status"]
 #     except Exception as e:
-#         print(e)
 #         raise
-#
-
-
-
-if __name__ == "__main__":
-    print(status_documents(document_id="7fc638cd-2ec1-4a83-9ef1-db4dfed2747b",namespace_name="supplycmd"))

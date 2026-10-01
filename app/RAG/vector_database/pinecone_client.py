@@ -21,9 +21,10 @@ from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 # load .env keys
-load_dotenv()
-pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-index = pc.Index("hr")
+load_dotenv(dotenv_path=".env.test")
+pc = Pinecone(api_key=os.getenv("TEST_PINECONE_API_KEY"))
+index_name = os.getenv("TEST_PINECONE_INDEX")
+index = pc.Index(str(index_name))
 
 
 # def create_namespace(namespace: str):
@@ -84,8 +85,9 @@ def create_namespace(namespace: str):
             return True
 
         return True
-    except Exception as e:
-        raise Exception(f"error occured during namespace creation as {e}")
+    except Exception:
+        logger.exception("Pinecone namespace creation failed")
+        raise
 
 
 
@@ -95,11 +97,12 @@ def connect_to_namespace(namespace:str):
             return pc.Index(namespace)
         else:
             return "index does not exist. please double check the index name before connecting"
-    except Exception as e:
-        print(e)
-        raise f"error occured during connecting to namespace as {e}"
+    except Exception:
+        logger.exception("Pinecone namespace connection failed")
+        raise
 
-
+if __name__ == "__main__":
+    print(index.describe_index_stats(namespace="cola")["total_vector_count"])
 
 
 

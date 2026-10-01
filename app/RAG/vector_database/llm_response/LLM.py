@@ -20,9 +20,12 @@ Output:
 import uuid
 from app.RAG.vector_database.llm_response.LLM_client import client
 import time
+import logging
 from openai import RateLimitError
 from openai import APITimeoutError
 from openai import APIConnectionError
+
+logger = logging.getLogger(__name__)
 
 System_prompt = """
 You are an AI HR assistant for company employees.
@@ -242,13 +245,9 @@ def call_llm(messages):
 
             wait_time = 2 ** attempt
 
-            print(
+            logger.warning(
                 f"LLM request failed. "
                 f"Retrying in {wait_time}s..."
             )
 
             time.sleep(wait_time)
-
-if __name__ == "__main__":
-    print(
-    LLM_response(employee_question="purpose and scope", docs=[{'text': '3. mission, vision, and core values\n3.1 mission\nto move goods reliably, safely, and efficiently, enabling our clients to serve their own customers with confidence.', 'retrieval_score': 0.587501466, 'document_id': 'cc04e358-917c-47bc-9f58-4b841061b47c', 'chunk_index': 5}, {'text': '1. purpose and scope\nthis recruitment manual describes the standard hiring process at skyjet logistics ltd., from requisition approval through onboarding completion. it applies to all departments and branch offices and is intended for use by hiring managers, hr recruiters, and interview panel members.\nthis manual should be read alongside the employee handbook (document id sjl-hr-001) for post-hire policies, and the it security policy (document id sjl-it-001) for provisioning of system access to new hires.', 'retrieval_score': 0.55512625, 'document_id': '7fc638cd-2ec1-4a83-9ef1-db4dfed2747b', 'chunk_index': 2}, {'text': '3. mission, vision, and core values\n3.2 vision\nto be the most trusted logistics partner in the region, recognized for operational excellence and the integrity of our people.', 'retrieval_score': 0.554245, 'document_id': 'cc04e358-917c-47bc-9f58-4b841061b47c', 'chunk_index': 6}]))

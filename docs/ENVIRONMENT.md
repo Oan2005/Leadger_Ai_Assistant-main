@@ -6,6 +6,9 @@ variables in your shell/deployment environment before running the app.
 | Variable | Required | Description |
 |---|---|---|
 | `PINECONE_API_KEY` | **Yes** | API key for the Pinecone project hosting the `"hr"` index. Read by `app/vector_database/pinecone_client.py`. **This did not exist in the original project** — the key was previously hardcoded in source. See `docs/SECURITY_NOTE.md`. |
+| `RESEND_API_KEY` | **Yes for production email** | Resend API key used to send invitation emails. |
+| `RESEND_FROM_EMAIL` | **Yes for production email** | Sender address on a domain verified in Resend, for example `invitations@mail.example.com`. The testing-only `onboarding@resend.dev` address must not be used in production. |
+| `MAX_UPLOAD_SIZE_MB` | No | Maximum document upload size in megabytes. Defaults to `25`. Uploads over this limit receive `413`. |
 
 ## Not environment-configurable (unchanged from original)
 

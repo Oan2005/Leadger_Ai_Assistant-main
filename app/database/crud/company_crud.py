@@ -125,13 +125,14 @@ def create_company(company_name: str, namespace: str):
                     }
                 }
 
-    except Exception as e:
-        con.rollback()
-        print(e)
+    except Exception:
+        if "con" in locals() and con is not None:
+            con.rollback()
+        logger.exception("Failed to create company")
         return {
             "success": False,
             "message": "Error creating company",
-            "status": str(e)
+            "status": "Unable to create company."
         }
 def check_company_existence(company_id: str):
     with connect_to_database() as con:
@@ -171,8 +172,8 @@ def delete_company(company_id: str):
         # Delete company's entire namespace from Pinecone
         try:
             index.delete_namespace(namespace)
-        except Exception as e:
-            print(f"Pinecone namespace deletion error: {e}")
+        except Exception:
+            logger.exception("Pinecone namespace deletion failed")
 
             return {
                 "success": False,
@@ -204,8 +205,8 @@ def delete_company(company_id: str):
 
                     con.commit()
 
-        except Exception as e:
-            print(f"Database company deletion error: {e}")
+        except Exception:
+            logger.exception("Database company deletion failed")
 
             return {
                 "success": False,
@@ -221,8 +222,8 @@ def delete_company(company_id: str):
             "namespace": "deleted successfully"
         }
 
-    except Exception as e:
-        print(f"Unexpected company deletion error: {e}")
+    except Exception:
+        logger.exception("Unexpected company deletion failure")
 
         return {
             "success": False,
@@ -237,9 +238,9 @@ def get_company_by_id(company_id: str):
                 if company is None:
                     return None
                 return {"success": True,"company_name": company[1],"company_id": company[0],"company_namespace": company[3]}
-    except Exception as e:
-        print(e)
-        return {"success":False,"error":e}
+    except Exception:
+        logger.exception("Failed to retrieve company")
+        return {"success": False, "error": "Unable to retrieve company."}
     finally:
         con.close()
 
@@ -253,9 +254,9 @@ def get_namespace_by_company_id(company_id:str):
                 if namespace is None:
                     return False
             return {"success": True, "namespace": namespace}
-    except Exception as e:
-        print(e)
-        return {"success":False,"error":str(e)}
+    except Exception:
+        logger.exception("Failed to retrieve company namespace")
+        return {"success": False, "error": "Unable to retrieve company namespace."}
 
 def update_company_name(company_id,company_name):
     try:
@@ -267,8 +268,9 @@ def update_company_name(company_id,company_name):
                 if company is None:
                     return False
                 return {"success": True,"company_name": company[1]}
-    except Exception as e:
-        return str(e)
+    except Exception:
+        logger.exception("Failed to update company name")
+        return {"success": False, "error": "Unable to update company name."}
 
 def get_namespace_index_stats(company_id:str):
     with connect_to_database() as con:
@@ -298,6 +300,7 @@ def get_namespace_index_stats(company_id:str):
                     "usage_precentage":f"{usage_precentage}%"
                 }
             }
+        
 
 def can_add_to_namespace(company_id:str,vectors_numbers:int):
     with connect_to_database() as con:
@@ -305,13 +308,11 @@ def can_add_to_namespace(company_id:str,vectors_numbers:int):
             cur.execute("SELECT namespace FROM companies WHERE company_id = %s;", (company_id,))
             namespace = cur.fetchone()[0]
             if namespace is None:
-                return "Namespace not found."
-            status = index.describe_index_stats()
-            used_usage = status["namespaces"][namespace]["vector_count"]
+                return None
+            status = index.describe_index_stats(namespace=namespace)
+            used_usage = status["total_vector_count"]
             if used_usage+vectors_numbers >10000:
                 return False
             return True
 
             
-
-

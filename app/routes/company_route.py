@@ -4,8 +4,10 @@ from .route_services import delete_company,get_users_by_company_id
 from ..auth.user_auth import require_admin
 from ..database.crud.company_crud import get_namespace_by_company_id, update_company_name, check_company_existence
 from ..database.crud.users_crud import get_user_by_id
+import logging
 
 company_route = APIRouter(tags=['company'])
+logger = logging.getLogger(__name__)
 
 
 #DONE
@@ -26,8 +28,11 @@ async def delete_all_company(current_user = Depends(require_admin)):
         if not request["success"]:
             raise HTTPException(status_code=404, detail=request["message"])
         return {"message":"{} deleted all company records".format(user_name)}
-    except Exception as e:
-        return e
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to delete company")
+        raise HTTPException(status_code=500, detail="Unable to delete company.")
 
 @company_route.get("/company/users")
 async def get_company_users(current_user = Depends(require_admin)):
@@ -59,8 +64,14 @@ async def get_namespace(current_user = Depends(require_admin)):
         if company_namespace is False:
             raise HTTPException(status_code=404, detail="Company namespace doesnt exists")
         return company_namespace["namespace"]
-    except Exception as e:
-        return e
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to retrieve company namespace")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to retrieve company namespace."
+        )
 
 #DONE
 @company_route.patch("/company/company_id/{new_name}")
@@ -75,5 +86,4 @@ async def change_company_name(new_name:str,current_user = Depends(require_admin)
     if update_request is False:
         raise HTTPException(status_code=409, detail="Company name already exists")
     return update_request
-
 

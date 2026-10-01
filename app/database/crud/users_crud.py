@@ -1,6 +1,4 @@
 from fastapi import HTTPException
-from nbclient import execute
-
 from app.database.db_connection import connect_to_database
 from pydantic import BaseModel,EmailStr
 from app.supabase_client_package .supabase_connection import Supabase_admin
@@ -66,8 +64,8 @@ def get_user_by_id(user_id):
 
                 return dict(zip(columns, user))
 
-    except Exception as e:
-        print(f"Get user error: {e}")
+    except Exception:
+        logger.exception("Failed to retrieve user")
         raise
 
 def employee_update(
@@ -118,11 +116,11 @@ def employee_update(
 
                 return {"success": True}
 
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Failed to update employee profile")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Unable to update employee profile."
         }
 
 
@@ -180,11 +178,11 @@ def admin_update_employee(
 
                 return {"success": True}
 
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Failed to update employee")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Unable to update employee."
         }
 
 def create_invited_user(
@@ -230,8 +228,8 @@ def create_invited_user(
 
                 return True
 
-    except Exception as e:
-        print(f"Error creating invited user: {e}")
+    except Exception:
+        logger.exception("Failed to create invited user")
         return False
 def create_user(data:users):
     try:
@@ -251,18 +249,24 @@ def create_user(data:users):
                 return {
                     "sucess": True,"user_created as id":user.user_id,
                 }
-    except Exception as e:
-        print(e)
-        return {"sucess": False,"error type":e}
+    except Exception:
+        logger.exception("Failed to create user")
+        return {"sucess": False, "error type": "Unable to create user."}
 
 #Later
-def delete_user_by_id(user_id: str):
+def delete_user_by_id(user_id: str, company_id: str):
     try:
-        if check_user_exists(user_id) is False:
-            raise "user not found"
         user_information = get_user_by_id(user_id)
+        if (
+            user_information is None
+            or user_information["company_id"] != company_id
+        ):
+            return {
+                "success": False,
+                "error": "User not found"
+            }
+
         email = user_information["email"]
-        company_id = user_information["company_id"]
         response = Supabase_admin.auth.admin.delete_user(user_id)
 
         Supabase_admin.table("invitations") \
@@ -277,10 +281,11 @@ def delete_user_by_id(user_id: str):
             "user_id": user_id
         }
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to delete user")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Unable to delete user."
         }
 
 
@@ -305,13 +310,14 @@ def change_role(user_id: str, company_id: str, role: str):
                 con.commit()
                 return True
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to change user role")
         raise HTTPException(
-            status_code=400,
-            detail=str(e)
+            status_code=500,
+            detail="Unable to update user role."
         )
 
-def check_user_exists(user_id:str):
+def check_user_exists(user_id: str, company_id: str | None = None):
     """
     this function turn is to check weather the passed user id exists in the company record or not
 
@@ -327,19 +333,35 @@ def check_user_exists(user_id:str):
     try:
         with connect_to_database() as con:
             with con.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT user_id
-                    FROM users
-                    where user_id = %s;
-                    """
-                    , (user_id,))
+                if company_id is None:
+                    cur.execute(
+                        """
+                        SELECT user_id
+                        FROM users
+                        WHERE user_id = %s;
+                        """,
+                        (user_id,)
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT user_id
+                        FROM users
+                        WHERE user_id = %s
+                        AND company_id = %s;
+                        """,
+                        (user_id, company_id)
+                    )
                 response = cur.fetchone()
                 if response is None:
                     return False
                 return True
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"error occurd during retrive as {e}")
+        logger.exception("Failed to check user existence")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to check user existence."
+        )
 
 if __name__ == '__main__':
-    print(check_user_exists("3800bca6-3868-42e2-a024-2e2dfb9186b7"))
+    check_user_exists("3800bca6-3868-42e2-a024-2e2dfb9186b7")

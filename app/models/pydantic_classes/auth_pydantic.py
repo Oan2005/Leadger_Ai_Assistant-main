@@ -1,4 +1,7 @@
-from pydantic import BaseModel,EmailStr
+from typing import Literal
+from pydantic import BaseModel, EmailStr, Field  # type: ignore[reportMissingImports]
+
+Role = Literal["admin", "hr", "employee"]
 class SignInRequest(BaseModel):
     email:EmailStr
     password :str
@@ -37,7 +40,7 @@ class InvitationToken(BaseModel):
 
 class SignUpInvitationRequest(BaseModel):
     email:EmailStr
-    role:str
+    role:Role
     phone:str
 
 class SignUpInvitationData(BaseModel):
@@ -50,9 +53,9 @@ class SignUpInvitationResponse(BaseModel):
 
 
 class InvitedSignupRequest(BaseModel):
-    token: str
-    password: str
-    full_name: str
+    token: str = Field(min_length=1)
+    password: str = Field(min_length=8)
+    full_name: str = Field(min_length=1)
 
 
 class InvitedSignupResponse(BaseModel):

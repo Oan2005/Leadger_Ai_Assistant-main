@@ -6,8 +6,11 @@ Admin-only endpoints for ingesting, archiving, and unarchiving
 company documents in the knowledge base.
 """
 import os.path
+import logging
 import tempfile
 from pathlib import Path
+
+from app.auth.user_auth import require_hr_admin
 
 from .route_services import APIRouter, UploadFile, File, Depends, HTTPException
 from .route_services import Parse_Doc_for_Rag
@@ -17,82 +20,19 @@ from .route_services import (
     unarchive_documents_op,
 )
 from .route_services import create_documents, documents, archive_documents_from_database, \
-    unrchive_documents_from_database, delete_documents_from_database
+    unrchive_documents_from_database, delete_documents_from_database,get_documents
 from .route_services import embedd_chunks, extract_to_objects
 from .route_services import get_namespace_by_company_id
 from .route_services import get_user_by_id, require_admin
 from ..RAG.vector_database.pincecone_operations import delete_chunks, status_documents
 from ..database.crud.company_crud import can_add_to_namespace
+from ..services.upload_limits import save_upload_with_limit
+logger = logging.getLogger(__name__)
 
 admin_router = APIRouter(tags=["admin-documents"])
 
 
-#works good
-#should be optimized
-#old one
-# @admin_router.post("/upload")
-# async def upload_documents(
-#     file: UploadFile = File(...),
-#     current_user=Depends(require_admin),
-# ):
-#     """
-#     Upload and ingest a document into the company's vector database.
-#     """
-#
-#     # Get user/company information
-#     requested_info = get_user_by_id(current_user.id)
-#
-#     company_id = requested_info["users"][0][1]
-#     uploaded_by = requested_info["users"][0][0]
-#
-#     # Get company's Pinecone namespace
-#     get_namespace = get_namespace_by_company_id(company_id)
-#     company_namespace = str(get_namespace["namespace"][0]).lower()
-#
-#     # Read uploaded file
-#     contents = await file.read()
-#
-#     with open(file.filename, "wb") as f:
-#         f.write(contents)
-#     # Extract
-#     extract = extract_to_objects(file.filename)
-#     # Parse / chunk
-#     parse_docs = Parse_Doc_for_Rag(
-#         objects=extract,
-#         file_path=file.filename,
-#         company_id=company_id
-#     )
-#     # Embed
-#     vectors = parse_docs["vectors"]
-#     embedd_docs = embedd_chunks(vectors)
-#
-#     # Insert into company's namespace
-#     result = insert_chunks(
-#         embedd_docs[1:],
-#         namespace_name=company_namespace
-#     )
-#
-#     # Create document record
-#     doc_id = parse_docs["document_id"]
-#
-#     doc = documents(
-#         document_id=doc_id,
-#         company_id=company_id,
-#         uploaded_by=uploaded_by,
-#         filename=file.filename,
-#         version=1,
-#         status="ready",
-#         pinecone_namespace=company_namespace,
-#         total_chunks=len(embedd_docs),
-#     )
-#
-#     insertion_request = create_documents(data=doc)
-#
-#     if insertion_request["success"]:
-#         return {"status": "Success"}
-#
-#     return {"message": insertion_request}
-#new endpoint
+
 @admin_router.post("/upload")
 async def upload_documents(
     file: UploadFile = File(...),
@@ -111,6 +51,15 @@ async def upload_documents(
             raise HTTPException(
                 status_code=400,
                 detail="No file was provided."
+            )
+
+        supported_extensions = {
+            ".docx", ".pdf", ".pptx", ".xlsx", ".html", ".md", ".txt"
+        }
+        if Path(file.filename).suffix.lower() not in supported_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported document type."
             )
 
         # --------------------------------------------------
@@ -149,19 +98,7 @@ async def upload_documents(
         ).lower()
 
         # --------------------------------------------------
-        # 4. Read file
-        # --------------------------------------------------
-
-        contents = await file.read()
-
-        if not contents:
-            raise HTTPException(
-                status_code=400,
-                detail="The uploaded file is empty."
-            )
-
-        # --------------------------------------------------
-        # 5. Save temporarily
+        # 4. Stream file into a temporary location with a hard size limit
         # --------------------------------------------------
 
         safe_filename = Path(file.filename).name
@@ -173,8 +110,13 @@ async def upload_documents(
                 safe_filename
             )
 
-            with open(file_path, "wb") as f:
-                f.write(contents)
+            total_bytes = await save_upload_with_limit(file, file_path)
+
+            if total_bytes == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="The uploaded file is empty."
+                )
 
             # --------------------------------------------------
             # 6. Extract
@@ -184,7 +126,7 @@ async def upload_documents(
                 extract = extract_to_objects(file_path)
 
             except Exception as e:
-                print(f"Document extraction error: {e}")
+                logger.exception("Document extraction failed")
 
                 raise HTTPException(
                     status_code=400,
@@ -209,7 +151,7 @@ async def upload_documents(
                 )
 
             except Exception as e:
-                print(f"Document parsing error: {e}")
+                logger.exception("Document parsing failed")
 
                 raise HTTPException(
                     status_code=500,
@@ -241,7 +183,7 @@ async def upload_documents(
                 raise
 
             except Exception as e:
-                print(f"Embedding error: {e}")
+                logger.exception("Embedding failed")
 
                 raise HTTPException(
                     status_code=503,
@@ -265,7 +207,7 @@ async def upload_documents(
                 )
 
             except Exception as e:
-                print(f"Pinecone insertion error: {e}")
+                logger.exception("Pinecone insertion failed")
 
                 raise HTTPException(
                     status_code=503,
@@ -296,8 +238,17 @@ async def upload_documents(
                 if insertion_request == False:
                     raise HTTPException(status_code=503,detail="Unable to insert documents.")
 
-            except Exception as e:
-                print(f"Document database error: {e}")
+            except Exception:
+                logger.exception("Document database insertion failed")
+                try:
+                    cleanup_request = delete_chunks(
+                        doc_id,
+                        company_namespace
+                    )
+                    if not cleanup_request or cleanup_request.get("status") != "success":
+                        logger.error("Pinecone cleanup reported failure for document %s", doc_id)
+                except Exception:
+                    logger.exception("Pinecone cleanup failed for document %s", doc_id)
 
                 raise HTTPException(
                     status_code=500,
@@ -326,7 +277,7 @@ async def upload_documents(
         raise
 
     except Exception as e:
-        print(f"Unexpected upload error: {e}")
+        logger.exception("Unexpected upload error")
 
         raise HTTPException(
             status_code=500,
@@ -334,8 +285,45 @@ async def upload_documents(
         )
 
 
+@admin_router.get("/employee/documents")
+async def current_documents(
+    current_user=Depends(require_hr_admin)
+):
+    """
+    Retrieve a list of documents for the current user's company.
+    """
+    try:
+        requested_info = get_user_by_id(current_user.id)
 
+        if not requested_info or requested_info is None:
+            raise HTTPException(
+                status_code=404,
+                detail="User information not found."
+            )
 
+        company_id = requested_info["company_id"]
+
+        get_docs = get_documents(company_id)
+        if get_docs is False:
+            raise HTTPException(
+                status_code=404,
+                detail="No documents found for the company."
+            )
+        return {
+            "status": True,
+            "message": "Documents retrieved successfully.",
+            "documents": get_docs
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error while retrieving documents")
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred while retrieving documents."
+        )
+
+        
 
 #works good
 @admin_router.post("/archive/{document_id}")
@@ -381,7 +369,7 @@ async def archive_documents(
         except HTTPException:
             raise
         except Exception as e:
-            print(f"Document status check error: {e}")
+            logger.exception("Document status check failed")
             raise HTTPException(
                 status_code=503,
                 detail="Unable to check document status."
@@ -400,7 +388,7 @@ async def archive_documents(
                 company_namespace
             )
         except Exception as e:
-            print(f"Pinecone archive error: {e}")
+            logger.exception("Pinecone archive failed")
             raise HTTPException(
                 status_code=503,
                 detail="Unable to archive document."
@@ -414,12 +402,39 @@ async def archive_documents(
 
         # Archive document in database
         try:
-            archive_documents_from_database(
+            database_request = archive_documents_from_database(
                 document_id,
                 company_id
             )
         except Exception as e:
-            print(f"Database archive error: {e}")
+            logger.exception("Database archive update failed")
+            try:
+                rollback_request = unarchive_documents_op(
+                    document_id,
+                    company_namespace
+                )
+                if not rollback_request or not rollback_request.get("status"):
+                    logger.error("Pinecone archive rollback reported failure for document %s", document_id)
+            except Exception:
+                logger.exception("Pinecone archive rollback failed for document %s", document_id)
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Document was archived in the vector database, "
+                    "but the database record could not be updated."
+                )
+            )
+
+        if not database_request or database_request.get("success") is not True:
+            try:
+                rollback_request = unarchive_documents_op(
+                    document_id,
+                    company_namespace
+                )
+                if not rollback_request or not rollback_request.get("status"):
+                    logger.error("Pinecone archive rollback reported failure for document %s", document_id)
+            except Exception:
+                logger.exception("Pinecone archive rollback failed for document %s", document_id)
             raise HTTPException(
                 status_code=500,
                 detail=(
@@ -437,8 +452,8 @@ async def archive_documents(
     except HTTPException:
         raise
 
-    except Exception as e:
-        print(f"Unexpected archive error: {e}")
+    except Exception:
+        logger.exception("Unexpected archive error")
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while archiving the document."
@@ -506,8 +521,8 @@ async def unarchive_documents(
         except HTTPException:
             raise
 
-        except Exception as e:
-            print(f"Document status error: {e}")
+        except Exception:
+            logger.exception("Document status check failed")
 
             raise HTTPException(
                 status_code=503,
@@ -537,8 +552,8 @@ async def unarchive_documents(
         except HTTPException:
             raise
 
-        except Exception as e:
-            print(f"Pinecone unarchive error: {e}")
+        except Exception:
+            logger.exception("Pinecone unarchive failed")
 
             raise HTTPException(
                 status_code=503,
@@ -561,8 +576,8 @@ async def unarchive_documents(
                 company_id
             )
 
-        except Exception as e:
-            print(f"Database unarchive error: {e}")
+        except Exception:
+            logger.exception("Database unarchive update failed")
 
             # IMPORTANT:
             # Pinecone was already updated.
@@ -571,6 +586,24 @@ async def unarchive_documents(
             raise HTTPException(
                 status_code=500,
                 detail="Document was updated in the vector database, but the database status could not be updated."
+            )
+
+        if not database_request or database_request.get("success") is not True:
+            try:
+                rollback_request = archive_chunks(
+                    document_id,
+                    company_namespace
+                )
+                if not rollback_request or rollback_request.get("status") != "success":
+                    logger.error("Pinecone unarchive rollback reported failure for document %s", document_id)
+            except Exception:
+                logger.exception("Pinecone unarchive rollback failed for document %s", document_id)
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Document was updated in the vector database, "
+                    "but the database status could not be updated."
+                )
             )
 
         # -----------------------------------
@@ -587,7 +620,7 @@ async def unarchive_documents(
         raise
 
     except Exception as e:
-        print(f"Unexpected unarchive error: {e}")
+        logger.exception("Unexpected unarchive error")
 
         raise HTTPException(
             status_code=500,
@@ -655,7 +688,7 @@ async def delete_documents(
         raise
 
     except Exception as e:
-        print(f"Delete document error: {e}")
+        logger.exception("Delete document error")
 
         raise HTTPException(
             status_code=500,

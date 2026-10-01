@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI  # type: ignore[reportMissingImports]
 from app.auth.Auth_endpoint import auth_router
 from app.routes.employee_assistant_route import employee_router
 from app.routes.namespace_state_route import namespace_route
@@ -6,7 +6,9 @@ from app.routes.users_route import users_route
 from app.routes.company_route import company_route
 from app.routes.Admin_document_operations import admin_router
 from app.routes.analysis_metrics_route import analysis_chat_route
+import logging
 
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -49,9 +51,9 @@ def health():
         return {
             "status": "healthy"
         }
-    except Exception as e:
-        return {"message": str(e)}
-
+    except Exception:
+        logger.exception("Health check failed")
+        return {"status": "unhealthy"}
 
 
 

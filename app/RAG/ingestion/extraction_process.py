@@ -15,6 +15,9 @@ Dependencies:
 
 
 from docling.document_converter import DocumentConverter
+import logging
+
+logger = logging.getLogger(__name__)
 
 def extract_to_objects(file_path: str):
     """
@@ -37,8 +40,7 @@ def extract_to_objects(file_path: str):
 
         return result.document
 
-    except Exception as e:
-        print(f"Error extracting '{file_path}': {e}")
+    except Exception:
+        logger.exception("Document extraction failed")
         return None
-
 

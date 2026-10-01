@@ -60,5 +60,4 @@ def get_conversation_analysis(conversation_id):
                 return False
             return response
 
-if __name__ == '__main__':
-    print(get_conversation_analysis(conversation_id="495759fd-b004-47ad-aad6-e0abd78b240d"))
+    get_conversation_analysis(conversation_id="495759fd-b004-47ad-aad6-e0abd78b240d")

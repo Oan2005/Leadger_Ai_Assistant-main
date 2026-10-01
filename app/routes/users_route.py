@@ -1,3 +1,4 @@
+from typing import Literal
 from .route_services import HTTPException,APIRouter
 from .route_services import get_current_user,Depends
 
@@ -36,15 +37,27 @@ def delete_user(
     current_user=Depends(require_admin)
 ):
     try:
-        check_user_valid = check_user_exists(user_id)
+        requested_info = get_user_by_id(current_user.id)
+        if not requested_info:
+            raise HTTPException(
+                status_code=404,
+                detail="User information not found"
+            )
 
+        check_user_valid = check_user_exists(
+            user_id,
+            company_id=requested_info["company_id"]
+        )
         if not check_user_valid:
             raise HTTPException(
                 status_code=404,
                 detail="User not found"
             )
 
-        return delete_user_by_id(user_id = user_id)
+        return delete_user_by_id(
+            user_id=user_id,
+            company_id=requested_info["company_id"]
+        )
 
 
     except HTTPException:
@@ -60,7 +73,11 @@ def delete_user(
 
 #Works Good
 @users_route.patch('/company/users/{user_id}/{role}')
-async def update_role(user_id:str,role:str,current_user = Depends(require_admin)):
+async def update_role(
+    user_id: str,
+    role: Literal["admin", "hr", "employee"],
+    current_user=Depends(require_admin)
+):
     try:
         # returns True OR False
         check_user_valid = check_user_exists(user_id)
@@ -74,8 +91,8 @@ async def update_role(user_id:str,role:str,current_user = Depends(require_admin)
         if response is False:
             raise HTTPException(status_code=403,detail='Failed to Update the User Role')
         return {"message":"User Role Updated Successfully"}
-    except HTTPException as e:
-        raise HTTPException(status_code=500, detail="error occured as {}".format(e))
+    except HTTPException:
+        raise
 #Done
 @users_route.post("/company/users/invite_user")
 async def invite_user(
@@ -128,8 +145,8 @@ async def invite_user(
     except HTTPException:
         raise
 
-    except Exception as e:
-        print(f"Invitation error: {e}")
+    except Exception:
+        logger.exception("Invitation error")
 
         raise HTTPException(
             status_code=500,
@@ -208,15 +225,11 @@ async def update_employee_by_employee(
     except HTTPException:
         raise
 
-    except Exception as e:
-        print(f"Employee update error: {e}")
+    except Exception:
+        logger.exception("Employee update error")
 
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while updating the employee."
         )
-
-
-
-
 

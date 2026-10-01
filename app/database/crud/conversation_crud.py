@@ -1,6 +1,8 @@
 import uuid
+import logging
 
 from app.database.db_connection import connect_to_database
+logger = logging.getLogger(__name__)
 
 from app.database.db_connection import connect_to_database
 
@@ -56,11 +58,11 @@ def create_conversation(
 
                 return {"success": True, "conversation_id": conversation_id}
 
-    except Exception as e:
-        print(e)
+    except Exception:
+        logger.exception("Failed to create conversation")
         return {
             "success": False,
-            "error": str(e)
+            "error": "Unable to create conversation."
         }
 
 
@@ -77,8 +79,6 @@ if __name__ == "__main__":
         completion_tokens=122,
         cached=False
     )
-    print(request)
-
 
 
 

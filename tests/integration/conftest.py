@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import importlib
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -42,6 +44,7 @@ def load_test_environment() -> dict[str, str | None]:
         "TEST_SUPABASE_URL",
         "TEST_SUPABASE_KEY",
         "TEST_SUPABASE_SERVICE_ROLE_KEY",
+        "TEST_OPENROUTER_API_KEY",
     )
     missing = [name for name in required if not values.get(name)]
     if missing:
@@ -69,6 +72,9 @@ def load_test_environment() -> dict[str, str | None]:
         "SUPABASE_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
         "DATABASE_URL",
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENROUTE_API_KEY",
     ):
         os.environ.pop(name, None)
 
@@ -77,12 +83,22 @@ def load_test_environment() -> dict[str, str | None]:
     os.environ["SUPABASE_SERVICE_ROLE_KEY"] = (
         values["TEST_SUPABASE_SERVICE_ROLE_KEY"] or ""
     )
+    os.environ["TEST_OPENROUTER_API_KEY"] = (
+        values["TEST_OPENROUTER_API_KEY"] or ""
+    )
     if values.get("TEST_DATABASE_URL"):
         os.environ["DATABASE_URL"] = values["TEST_DATABASE_URL"] or ""
     else:
         # Keep dotenv's default non-override behavior from reloading the
         # production DATABASE_URL when application modules are imported.
         os.environ["DATABASE_URL"] = ""
+
+    # Some test modules import the application during collection, before this
+    # session fixture runs. Refresh the cached database configuration after
+    # the TEST environment has been installed.
+    database_module = sys.modules.get("app.database.db_connection")
+    if database_module is not None:
+        importlib.reload(database_module)
 
     return {
         "supabase_url": os.environ["SUPABASE_URL"],

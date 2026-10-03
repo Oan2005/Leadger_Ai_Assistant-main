@@ -1,12 +1,10 @@
 from openai import OpenAI
-import os
-from dotenv import load_dotenv
-load_dotenv()
+from app.llm_config import OPENROUTER_BASE_URL, get_openrouter_api_key
+
 client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.environ.get("OPENAI_API_KEY"),
+    base_url=OPENROUTER_BASE_URL,
+    api_key=get_openrouter_api_key(),
     max_retries=2,
     timeout=60.0
 )
-
 

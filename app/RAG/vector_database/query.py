@@ -35,7 +35,10 @@ def pinecone_query(employee_question: str, top_k = 3,employee_namespace = None):
         vector=query_embedded.tolist(),
         top_k=top_k,
         include_metadata=True,
-        namespace = employee_namespace
+        namespace = employee_namespace,
+        filter={
+            "status": {"$eq": "ready"}
+        }
     )
     if not response.matches:
         raise ValueError("No matches found.")

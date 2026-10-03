@@ -23,6 +23,12 @@ async def employee_chat(
     session_id: str | None = None,
     current_user=Depends(get_current_user)
 ):
+    if question is None or not question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Question must not be empty."
+        )
+
     # Create a new session if needed
     session_id = session_id or str(uuid.uuid4())
     # Get user information
@@ -50,11 +56,18 @@ async def employee_chat(
     ).lower()
 
     # Retrieve relevant documents
-    pinecone_documents = pinecone_query(
-        employee_question=question,
-        top_k=3,
-        employee_namespace=company_namespace
-    )
+    try:
+        pinecone_documents = pinecone_query(
+            employee_question=question,
+            top_k=3,
+            employee_namespace=company_namespace
+        )
+    except Exception:
+        logger.exception("Document retrieval failed")
+        raise HTTPException(
+            status_code=503,
+            detail="The document retrieval service is unavailable."
+        )
 
     # Make sure retrieval returned the expected structure
     if not isinstance(pinecone_documents, list):
@@ -66,10 +79,17 @@ async def employee_chat(
     # Generate LLM response
     start_time = time.perf_counter()
 
-    chat_response = LLM_response(
-        employee_question=question,
-        docs=pinecone_documents
-    )
+    try:
+        chat_response = LLM_response(
+            employee_question=question,
+            docs=pinecone_documents
+        )
+    except Exception:
+        logger.exception("Answer service failed")
+        raise HTTPException(
+            status_code=503,
+            detail="The answer service is unavailable."
+        )
     response_time_ms = round(
         (time.perf_counter() - start_time) * 1000,
         3
@@ -103,8 +123,16 @@ async def employee_chat(
         completion_tokens=completion_tokens,
         cached=False
     )
-    if insert_request is False:
-        raise HTTPException(status_code=400, detail="Failed to create conversation")
+    if (
+        not isinstance(insert_request, dict)
+        or not insert_request.get("success")
+        or not insert_request.get("conversation_id")
+    ):
+        logger.error("Conversation persistence returned an unsuccessful result")
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to save the conversation."
+        )
 
     # Save retrieved documents
     create_documents_from_pinecone(
@@ -113,16 +141,27 @@ async def employee_chat(
     )
 
     # Run analysis
-    analysis_process(
+    analysis_result = analysis_process(
         conversation_id=insert_request["conversation_id"]
     )
+    if (
+        not isinstance(analysis_result, dict)
+        or not analysis_result.get("status")
+    ):
+        logger.error(
+            "Conversation analysis failed for conversation %s",
+            insert_request["conversation_id"]
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to complete conversation analysis."
+        )
 
     return {
         "answer": answer,
         "confidence": confidence,
         "session_id": session_id
     }
-
 
 
 

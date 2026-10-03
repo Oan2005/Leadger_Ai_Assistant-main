@@ -2,6 +2,10 @@ from fastapi import HTTPException
 from app.database.db_connection import connect_to_database
 from pydantic import BaseModel,EmailStr
 from app.supabase_client_package .supabase_connection import Supabase_admin
+import logging
+
+logger = logging.getLogger(__name__)
+
 class users(BaseModel):
     company_id: str
     full_name:str
@@ -364,4 +368,4 @@ def check_user_exists(user_id: str, company_id: str | None = None):
         )
 
 if __name__ == '__main__':
-    check_user_exists("3800bca6-3868-42e2-a024-2e2dfb9186b7")
+    print(get_user_by_id(user_id="ba9f5d83-5bd2-47d7-baa4-0f8f0a728d0f"))

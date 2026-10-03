@@ -49,7 +49,7 @@ def sign_in(data: SignInRequest):
 
 if __name__ == "__main__":
     # Example usage
-    test_data = SignInRequest(email="osamahsheikh2@gmail.com", password="Hassan1977")
+    test_data = SignInRequest(email="test-employee-pepsi@gmail.com", password="Hassan1977")
     print(sign_in(test_data))
 
 

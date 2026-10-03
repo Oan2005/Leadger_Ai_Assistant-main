@@ -124,9 +124,10 @@ def login(data: SignInRequest):
         user_info = get_user_by_id(
             auth_response["user_id"]
         )
+        logger.info(user_info)
 
         # Auth account exists, but application account doesn't
-        if not user_info:
+        if user_info is None:
             logger.error("Auth user has no application user record")
 
             raise HTTPException(
